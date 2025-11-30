@@ -52,18 +52,25 @@ export class ReminderParser {
     minutes: number;
     raw: string;
   } | null {
-    // Pattern: 7pm, 7:30pm, 07:30, 19:30
+    // Pattern priorities:
+    // 1. 12-hour with AM/PM: 7pm, 7:30pm, 1pm, 12:30am
+    // 2. 24-hour format: 13:00, 14:30, 19:00, 20:15
+    // 3. Named times: morning, afternoon, evening, night
     const timePatterns = [
-      /(\d{1,2}):(\d{2})\s*(am|pm)/i,
-      /(\d{1,2})\s*(am|pm)/i,
-      /(\d{1,2}):(\d{2})/,
+      /(\d{1,2}):(\d{2})\s*(am|pm)/i,    // 7:30pm, 1:15am
+      /(\d{1,2})\s*(am|pm)/i,            // 7pm, 1am, 12pm
+      /\b([0-2]?[0-9]):([0-5][0-9])\b/,  // 13:00, 14:30, 9:30 (24-hour or general)
+      /\b([01]?[0-9]|2[0-3])\b/,         // 13, 14, 20 (24-hour single digit)
       /(morning|afternoon|evening|night)/i,
     ];
 
     for (const pattern of timePatterns) {
       const match = message.match(pattern);
       if (match) {
-        return this.parseTimeMatch(match);
+        const result = this.parseTimeMatch(match);
+        if (result && result.hours >= 0 && result.hours < 24) {
+          return result;
+        }
       }
     }
 
@@ -74,7 +81,7 @@ export class ReminderParser {
     hours: number;
     minutes: number;
     raw: string;
-  } {
+  } | null {
     const raw = match[0];
 
     // Named times
@@ -95,11 +102,21 @@ export class ReminderParser {
     const minutes = match[2] ? parseInt(match[2], 10) : 0;
     const meridiem = match[3]?.toLowerCase();
 
-    // Convert to 24-hour format
+    // Validate minutes
+    if (minutes < 0 || minutes > 59) {
+      return null;
+    }
+
+    // Handle 12-hour format with AM/PM
     if (meridiem === 'pm' && hours < 12) {
       hours += 12;
     } else if (meridiem === 'am' && hours === 12) {
       hours = 0;
+    }
+
+    // Validate hours (0-23 for 24-hour format)
+    if (hours < 0 || hours > 23) {
+      return null;
     }
 
     return { hours, minutes, raw };
