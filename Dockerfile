@@ -2,15 +2,17 @@ FROM node:20-alpine AS base
 
 WORKDIR /app
 
-# Install dependencies
+# Copy package files
 COPY package*.json ./
+
+# Copy Prisma schema BEFORE npm install
+COPY prisma ./prisma
+
+# Install dependencies (this will run postinstall → prisma generate)
 RUN npm ci
 
-# Copy source
+# Copy source code
 COPY . .
-
-# Generate Prisma client
-RUN npx prisma generate
 
 # Build TypeScript
 RUN npm run build
