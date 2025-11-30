@@ -20,6 +20,10 @@
   "keywords": ["whatsapp", "reminders", "conversational-ai"],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "dependencies": {
     "@prisma/client": "^5.8.0",
     "axios": "^1.6.5",
