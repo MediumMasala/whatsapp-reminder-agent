@@ -10,8 +10,12 @@ import { ReminderScheduler } from './jobs/scheduler';
 
 const app = express();
 
-// Parse JSON bodies
-app.use(express.json());
+// Parse JSON bodies and preserve raw body for signature verification
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf.toString('utf8');
+  }
+}));
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {

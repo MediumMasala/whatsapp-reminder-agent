@@ -20,10 +20,19 @@ export function verifyWebhookSignature(
     return;
   }
 
-  // Compute expected signature
+  // Get raw body (preserved during JSON parsing)
+  const rawBody = (req as any).rawBody;
+
+  if (!rawBody) {
+    logger.error('Raw body not available for signature verification');
+    res.status(500).json({ error: 'Internal server error' });
+    return;
+  }
+
+  // Compute expected signature using raw body
   const expectedSignature = crypto
     .createHmac('sha256', env.WHATSAPP_WEBHOOK_SECRET)
-    .update(JSON.stringify(req.body))
+    .update(rawBody)
     .digest('hex');
 
   const expectedSignatureWithPrefix = `sha256=${expectedSignature}`;
@@ -33,7 +42,7 @@ export function verifyWebhookSignature(
     Buffer.from(signature),
     Buffer.from(expectedSignatureWithPrefix)
   )) {
-    logger.warn({ signature }, 'Invalid webhook signature');
+    logger.warn({ signature, expectedSignature: expectedSignatureWithPrefix }, 'Invalid webhook signature');
     res.status(401).json({ error: 'Invalid signature' });
     return;
   }
