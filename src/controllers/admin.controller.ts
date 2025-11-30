@@ -1,16 +1,24 @@
 import { Request, Response } from 'express';
 import { getPrismaClient } from '../config/database';
 import { logger } from '../config/logger';
+import { env } from '../config/env';
 
 export class AdminController {
   private prisma = getPrismaClient();
 
   /**
    * Delete all data for a user by phone number
-   * URL: /admin/delete/:phoneNumber
+   * URL: /admin/delete/:phoneNumber?token=ADMIN_TOKEN
    */
   async deleteUserData(req: Request, res: Response): Promise<void> {
     try {
+      // Check admin token
+      const token = req.query.token as string;
+      if (token !== env.ADMIN_TOKEN) {
+        res.status(401).json({ error: 'Unauthorized - Invalid admin token' });
+        return;
+      }
+
       const phoneNumber = req.params.phoneNumber;
 
       if (!phoneNumber) {
@@ -82,10 +90,17 @@ export class AdminController {
 
   /**
    * Get stats about a user
-   * URL: /admin/stats/:phoneNumber
+   * URL: /admin/stats/:phoneNumber?token=ADMIN_TOKEN
    */
   async getUserStats(req: Request, res: Response): Promise<void> {
     try {
+      // Check admin token
+      const token = req.query.token as string;
+      if (token !== env.ADMIN_TOKEN) {
+        res.status(401).json({ error: 'Unauthorized - Invalid admin token' });
+        return;
+      }
+
       const phoneNumber = req.params.phoneNumber;
 
       if (!phoneNumber) {
