@@ -1,47 +1,30 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files first
 COPY package*.json ./
 
-# Copy Prisma schema
+# Copy Prisma schema BEFORE installing dependencies
 COPY prisma ./prisma
 
-# Install all dependencies
+# Install all dependencies (including Prisma)
 RUN npm ci
 
-# Explicitly generate Prisma client
+# Generate Prisma Client
 RUN npx prisma generate
 
-# Copy source code
+# Copy the rest of the application
 COPY . .
 
 # Build TypeScript
 RUN npm run build
 
-# Production image
-FROM node:20-alpine AS production
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Copy Prisma schema
-COPY prisma ./prisma
-
-# Install production dependencies only
-RUN npm ci --only=production
-
-# Explicitly generate Prisma client for production
-RUN npx prisma generate
-
-# Copy built application from base stage
-COPY --from=base /app/dist ./dist
+# Remove dev dependencies to reduce image size
+RUN npm prune --production
 
 # Expose port
 EXPOSE 3000
 
-# Start application
+# Start application (runs migrations and starts server)
 CMD ["npm", "start"]
