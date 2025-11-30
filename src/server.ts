@@ -18,6 +18,9 @@ app.use(express.json({
   }
 }));
 
+// Serve static files from public directory
+app.use(express.static('src/public'));
+
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -49,6 +52,20 @@ app.delete('/admin/delete/:phoneNumber', (req: Request, res: Response) =>
 // Get user stats
 app.get('/admin/stats/:phoneNumber', (req: Request, res: Response) =>
   adminController.getUserStats(req, res)
+);
+
+// Bot configuration endpoints
+app.get('/admin/config', (req: Request, res: Response) =>
+  adminController.getConfig(req, res)
+);
+
+app.post('/admin/config', (req: Request, res: Response) =>
+  adminController.updateConfig(req, res)
+);
+
+// Dashboard statistics
+app.get('/admin/dashboard-stats', (req: Request, res: Response) =>
+  adminController.getDashboardStats(req, res)
 );
 
 // Initialize background services

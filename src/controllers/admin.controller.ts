@@ -1,9 +1,12 @@
 import { Request, Response } from 'express';
 import { getPrismaClient } from '../config/database';
 import { logger } from '../config/logger';
+import fs from 'fs';
+import path from 'path';
 
 export class AdminController {
   private prisma = getPrismaClient();
+  private configPath = path.join(__dirname, '../config/bot-config.json');
 
   /**
    * Delete all data for a user by phone number
@@ -137,6 +140,61 @@ export class AdminController {
         error: 'Failed to get user stats',
         message: error instanceof Error ? error.message : 'Unknown error'
       });
+    }
+  }
+
+  /**
+   * Get bot configuration
+   * URL: /admin/config
+   */
+  async getConfig(_req: Request, res: Response): Promise<void> {
+    try {
+      const config = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+      res.json(config);
+    } catch (error) {
+      logger.error({ error }, 'Admin: Error reading config');
+      res.status(500).json({ error: 'Failed to read configuration' });
+    }
+  }
+
+  /**
+   * Update bot configuration
+   * URL: /admin/config (POST)
+   */
+  async updateConfig(req: Request, res: Response): Promise<void> {
+    try {
+      const config = req.body;
+      fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2));
+      logger.info('Admin: Bot configuration updated');
+      res.json({ success: true, message: 'Configuration updated successfully' });
+    } catch (error) {
+      logger.error({ error }, 'Admin: Error updating config');
+      res.status(500).json({ error: 'Failed to update configuration' });
+    }
+  }
+
+  /**
+   * Get dashboard statistics
+   * URL: /admin/dashboard-stats
+   */
+  async getDashboardStats(_req: Request, res: Response): Promise<void> {
+    try {
+      const [totalUsers, totalReminders, pendingReminders, totalConversations] = await Promise.all([
+        this.prisma.user.count(),
+        this.prisma.reminder.count(),
+        this.prisma.reminder.count({ where: { status: 'pending' } }),
+        this.prisma.conversation.count(),
+      ]);
+
+      res.json({
+        totalUsers,
+        totalReminders,
+        pendingReminders,
+        totalConversations,
+      });
+    } catch (error) {
+      logger.error({ error }, 'Admin: Error getting dashboard stats');
+      res.status(500).json({ error: 'Failed to get dashboard statistics' });
     }
   }
 }

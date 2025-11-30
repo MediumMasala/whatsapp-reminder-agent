@@ -1,0 +1,7 @@
+{
+  "botName": "PinMe",
+  "greetingMessage": "Hi, I am {BOT_NAME}. What would you like me to remember?",
+  "returningUserMessage": "Hi! What would you like me to remember?",
+  "confirmationMessage": "Reminder set for {TIME}",
+  "reminderNotification": "Your time is up, {TASK}"
+}
