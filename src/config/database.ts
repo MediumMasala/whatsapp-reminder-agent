@@ -6,19 +6,10 @@ let prisma: PrismaClient;
 export function getPrismaClient(): PrismaClient {
   if (!prisma) {
     prisma = new PrismaClient({
-      log: [
-        { level: 'warn', emit: 'event' },
-        { level: 'error', emit: 'event' },
-      ],
+      log: ['warn', 'error'],
     });
 
-    prisma.$on('warn' as any, (e: any) => {
-      logger.warn(e);
-    });
-
-    prisma.$on('error' as any, (e: any) => {
-      logger.error(e);
-    });
+    logger.info('Prisma client initialized');
   }
 
   return prisma;
