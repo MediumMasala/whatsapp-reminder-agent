@@ -33,11 +33,14 @@ services:
       - key: DEFAULT_TIMEZONE
         value: Asia/Kolkata
 
+  - type: redis
+    name: whatsapp-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
 databases:
   - name: whatsapp-db
     plan: free
     databaseName: whatsapp_reminders
     user: whatsapp_user
-
-  - name: whatsapp-redis
-    plan: free
