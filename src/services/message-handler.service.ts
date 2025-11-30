@@ -36,6 +36,10 @@ export class MessageHandler {
 
     // Route to appropriate handler
     switch (intent) {
+      case 'greeting':
+        await this.handleGreeting(user);
+        break;
+
       case 'create_reminder':
         await this.handleCreateReminder(user, messageText);
         break;
@@ -59,7 +63,12 @@ export class MessageHandler {
   }
 
   private detectIntent(message: string, _lastIntent?: DetectedIntent): DetectedIntent {
-    const lowerMessage = message.toLowerCase();
+    const lowerMessage = message.toLowerCase().trim();
+
+    // Greeting detection (should be first to catch initial interactions)
+    if (/^(hi|hello|hey|hola|namaste|good morning|good evening|greetings)$/i.test(lowerMessage)) {
+      return 'greeting';
+    }
 
     // List reminders
     if (/\b(list|show|my reminders|upcoming|what|all)\b/i.test(lowerMessage)) {
@@ -173,6 +182,16 @@ export class MessageHandler {
       userId: user.id,
       text: 'To cancel a reminder, please send "list" to see all reminders, then reply with the number to cancel.',
       intent: 'cancel_reminder',
+    });
+  }
+
+  private async handleGreeting(user: User): Promise<void> {
+    const greetingText = `Hi there! 👋\n\nI'm your personal reminder assistant! I'll help you remember important things.\n\n📝 Just tell me what you want to be reminded about, like:\n• "Remind me tomorrow at 9am to call doctor"\n• "Pay rent at 7pm"\n• "Tomorrow evening meeting"\n\nOr try:\n• "List" - to see your reminders\n• "Help" - for more options\n\nWhat would you like me to remind you about?`;
+
+    await this.sendMessage(user.phoneNumber, {
+      userId: user.id,
+      text: greetingText,
+      intent: 'greeting',
     });
   }
 

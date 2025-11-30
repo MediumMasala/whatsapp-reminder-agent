@@ -27,6 +27,7 @@ export interface UpdateReminderInput {
 export type ConversationDirection = 'inbound' | 'outbound';
 
 export type DetectedIntent =
+  | 'greeting'
   | 'create_reminder'
   | 'list_reminders'
   | 'cancel_reminder'
