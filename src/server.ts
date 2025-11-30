@@ -4,6 +4,7 @@ import { logger } from './config/logger';
 import { getPrismaClient, disconnectDatabase } from './config/database';
 import { disconnectRedis } from './config/redis';
 import { WebhookController } from './controllers/webhook.controller';
+import { AdminController } from './controllers/admin.controller';
 import { verifyWebhookSignature, handleWebhookVerification } from './middleware/webhook-verification';
 import { ReminderWorker } from './jobs/reminder-worker';
 import { ReminderScheduler } from './jobs/scheduler';
@@ -35,6 +36,19 @@ app.post(
   '/webhook',
   verifyWebhookSignature,
   (req: Request, res: Response) => webhookController.handleWebhook(req, res)
+);
+
+// Admin endpoints
+const adminController = new AdminController();
+
+// Delete user data (for testing)
+app.delete('/admin/delete/:phoneNumber', (req: Request, res: Response) =>
+  adminController.deleteUserData(req, res)
+);
+
+// Get user stats
+app.get('/admin/stats/:phoneNumber', (req: Request, res: Response) =>
+  adminController.getUserStats(req, res)
 );
 
 // Initialize background services

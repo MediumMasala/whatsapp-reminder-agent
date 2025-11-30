@@ -26,6 +26,8 @@ const envSchema = z.object({
   DEFAULT_TIMEZONE: z.string().default('Asia/Kolkata'),
   REMINDER_CHECK_INTERVAL_MS: z.string().transform(Number).default('30000'),
   MAX_CONVERSATION_HISTORY: z.string().transform(Number).default('100'),
+
+  ADMIN_TOKEN: z.string().optional().default('admin_test_token_2025'),
 });
 
 function validateEnv() {
