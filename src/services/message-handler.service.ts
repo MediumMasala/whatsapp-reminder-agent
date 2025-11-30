@@ -127,7 +127,7 @@ export class MessageHandler {
 
       // Format confirmation message
       const timeStr = this.formatDateTime(parsed.scheduledTime);
-      const confirmationMsg = `✓ Reminder set!\n\n📝 ${parsed.text}\n⏰ ${timeStr}`;
+      const confirmationMsg = `✅ *Reminder Set!*\n\n📝 *Task:* ${parsed.text}\n⏰ *When:* ${timeStr}\n\nI'll remind you at the scheduled time!`;
 
       await this.sendMessage(user.phoneNumber, {
         userId: user.id,
