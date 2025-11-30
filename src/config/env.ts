@@ -10,8 +10,10 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().min(1),
 
-  REDIS_HOST: z.string().default('localhost'),
-  REDIS_PORT: z.string().transform(Number).default('6379'),
+  // Railway uses REDIS_URL, local uses REDIS_HOST/PORT
+  REDIS_URL: z.string().optional(),
+  REDIS_HOST: z.string().optional(),
+  REDIS_PORT: z.string().transform(Number).optional(),
   REDIS_PASSWORD: z.string().optional(),
 
   WHATSAPP_API_URL: z.string().url(),
