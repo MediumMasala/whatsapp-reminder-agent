@@ -142,7 +142,13 @@ export class ReminderParser {
     dateMatch: { daysFromNow: number } | null,
     timeMatch: { hours: number; minutes: number }
   ): Date {
-    const now = new Date();
+    // Get current time in Asia/Kolkata timezone
+    const nowInKolkata = new Date().toLocaleString('en-US', {
+      timeZone: env.DEFAULT_TIMEZONE,
+    });
+    const now = new Date(nowInKolkata);
+
+    // Create target date in Asia/Kolkata timezone
     const targetDate = new Date(now);
 
     // Add days
@@ -150,7 +156,7 @@ export class ReminderParser {
       targetDate.setDate(targetDate.getDate() + dateMatch.daysFromNow);
     }
 
-    // Set time
+    // Set time (hours and minutes are already in user's intended time)
     targetDate.setHours(timeMatch.hours, timeMatch.minutes, 0, 0);
 
     // If time is in the past today, assume tomorrow
