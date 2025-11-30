@@ -12,11 +12,11 @@ export function getPrismaClient(): PrismaClient {
       ],
     });
 
-    prisma.$on('warn', (e) => {
+    prisma.$on('warn' as any, (e: any) => {
       logger.warn(e);
     });
 
-    prisma.$on('error', (e) => {
+    prisma.$on('error' as any, (e: any) => {
       logger.error(e);
     });
   }

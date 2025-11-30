@@ -1,5 +1,5 @@
 import { getPrismaClient } from '../config/database';
-import { CreateConversationInput, ConversationDirection } from '../types';
+import { CreateConversationInput } from '../types';
 import { Conversation } from '@prisma/client';
 
 export class ConversationRepository {

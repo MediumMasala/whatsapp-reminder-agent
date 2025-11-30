@@ -58,7 +58,7 @@ export class MessageHandler {
     }
   }
 
-  private detectIntent(message: string, lastIntent?: DetectedIntent): DetectedIntent {
+  private detectIntent(message: string, _lastIntent?: DetectedIntent): DetectedIntent {
     const lowerMessage = message.toLowerCase();
 
     // List reminders
@@ -168,7 +168,7 @@ export class MessageHandler {
     });
   }
 
-  private async handleCancelReminder(user: User, messageText: string): Promise<void> {
+  private async handleCancelReminder(user: User, _messageText: string): Promise<void> {
     await this.sendMessage(user.phoneNumber, {
       userId: user.id,
       text: 'To cancel a reminder, please send "list" to see all reminders, then reply with the number to cancel.',

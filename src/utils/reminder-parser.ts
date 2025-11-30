@@ -10,10 +10,8 @@ import { env } from '../config/env';
  * - "tomorrow morning meeting"
  */
 export class ReminderParser {
-  private timezone: string;
-
-  constructor(timezone: string = env.DEFAULT_TIMEZONE) {
-    this.timezone = timezone;
+  constructor(_timezone: string = env.DEFAULT_TIMEZONE) {
+    // Timezone stored for potential future use
   }
 
   /**

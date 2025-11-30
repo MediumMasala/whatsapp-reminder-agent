@@ -51,8 +51,8 @@ export class ConversationService {
         detectedIntent: msg.detectedIntent as DetectedIntent | undefined,
       })),
       lastIntent,
-      lastActiveFlow,
-      lastReminderId,
+      lastActiveFlow: lastActiveFlow || undefined,
+      lastReminderId: lastReminderId || undefined,
     };
   }
 

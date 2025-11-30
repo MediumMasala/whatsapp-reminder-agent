@@ -1,4 +1,4 @@
-import { Queue, Worker, Job } from 'bullmq';
+import { Queue } from 'bullmq';
 import { getRedisClient } from '../config/redis';
 import { logger } from '../config/logger';
 import { Reminder } from '@prisma/client';
