@@ -31,13 +31,26 @@ export class MessageHandler {
     // Get conversation context for context-aware responses
     const context = await this.conversationService.getContext(user.id, 5);
 
+    // Check if this is first interaction (no previous messages)
+    const isFirstInteraction = context.recentMessages.length === 0;
+
     // Detect intent
     const intent = this.detectIntent(messageText, context.lastIntent);
 
     // Route to appropriate handler
     switch (intent) {
       case 'greeting':
-        await this.handleGreeting(user);
+        // Only show welcome message on first interaction
+        if (isFirstInteraction) {
+          await this.handleGreeting(user);
+        } else {
+          // For returning users, just acknowledge and ask what they need
+          await this.sendMessage(user.phoneNumber, {
+            userId: user.id,
+            text: 'Hi! What would you like me to remember?',
+            intent: 'greeting',
+          });
+        }
         break;
 
       case 'create_reminder':
@@ -127,7 +140,7 @@ export class MessageHandler {
 
       // Format confirmation message
       const timeStr = this.formatDateTime(parsed.scheduledTime);
-      const confirmationMsg = `✅ *Reminder Set!*\n\n📝 *Task:* ${parsed.text}\n⏰ *When:* ${timeStr}\n\nI'll remind you at the scheduled time!`;
+      const confirmationMsg = `Reminder set for ${timeStr}`;
 
       await this.sendMessage(user.phoneNumber, {
         userId: user.id,
@@ -186,7 +199,7 @@ export class MessageHandler {
   }
 
   private async handleGreeting(user: User): Promise<void> {
-    const greetingText = `Hi there! 👋\n\nI'm your personal reminder assistant! I'll help you remember important things.\n\n📝 Just tell me what you want to be reminded about, like:\n• "Remind me tomorrow at 9am to call doctor"\n• "Pay rent at 7pm"\n• "Tomorrow evening meeting"\n\nOr try:\n• "List" - to see your reminders\n• "Help" - for more options\n\nWhat would you like me to remind you about?`;
+    const greetingText = `Hi, I am PinMe. What would you like me to remember?`;
 
     await this.sendMessage(user.phoneNumber, {
       userId: user.id,

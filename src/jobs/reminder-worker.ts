@@ -71,7 +71,7 @@ export class ReminderWorker {
       }
 
       // Send WhatsApp message
-      const message = `🔔 Reminder:\n\n${reminderText}`;
+      const message = `Your time is up, ${reminderText}`;
 
       const result = await this.whatsappService.sendTextMessage({
         to: phoneNumber,
