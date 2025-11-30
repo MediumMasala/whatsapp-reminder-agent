@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(uuid())
+  phoneNumber   String         @unique @map("phone_number")
+  name          String?
+  timezone      String         @default("Asia/Kolkata")
+  isActive      Boolean        @default(true) @map("is_active")
+  metadata      Json?          // Store additional user preferences
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  reminders     Reminder[]
+  conversations Conversation[]
+
+  @@index([phoneNumber])
+  @@map("users")
+}
+
+model Reminder {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  reminderText    String    @map("reminder_text")
+  scheduledTime   DateTime  @map("scheduled_time")
+  status          String    @default("pending") // pending, sent, delivered, failed, cancelled
+  sentAt          DateTime? @map("sent_at")
+  deliveredAt     DateTime? @map("delivered_at")
+  failureReason   String?   @map("failure_reason")
+  whatsappMsgId   String?   @map("whatsapp_msg_id")
+  metadata        Json?     // Store parsed intent, original message context
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([scheduledTime, status])
+  @@map("reminders")
+}
+
+// CRITICAL: Full conversation memory for every WhatsApp interaction
+model Conversation {
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  direction         String    // inbound, outbound
+  messageText       String    @map("message_text") @db.Text
+  whatsappMessageId String?   @map("whatsapp_message_id")
+  timestamp         DateTime  @default(now())
+
+  // Parsed metadata for AI/context-aware features
+  detectedIntent    String?   @map("detected_intent") // create_reminder, list_reminders, cancel_reminder, etc.
+  extractedData     Json?     @map("extracted_data") // { time: "7pm", date: "tomorrow", etc. }
+  activeFlow        String?   @map("active_flow") // Which conversational flow was active
+  relatedReminderId String?   @map("related_reminder_id") // Link to reminder if applicable
+
+  metadata          Json?     // Additional context
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([userId, activeFlow])
+  @@index([detectedIntent])
+  @@map("conversations")
+}
