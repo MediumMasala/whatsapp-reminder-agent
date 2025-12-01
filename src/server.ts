@@ -44,8 +44,13 @@ app.post(
 // Admin endpoints
 const adminController = new AdminController();
 
-// Delete user data (for testing)
+// Delete user data (for testing) - DELETE method
 app.delete('/admin/delete/:phoneNumber', (req: Request, res: Response) =>
+  adminController.deleteUserData(req, res)
+);
+
+// Delete user data (for testing) - GET method for easy browser access
+app.get('/admin/delete/:phoneNumber', (req: Request, res: Response) =>
   adminController.deleteUserData(req, res)
 );
 
