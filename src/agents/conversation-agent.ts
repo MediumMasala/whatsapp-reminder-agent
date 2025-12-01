@@ -2,6 +2,7 @@ import { AgentType, IAgent, AgentContext, AgentResponse } from '../types/agents'
 import { BaseAgent } from './base-agent';
 import { DateTimeAgent } from './datetime-agent';
 import { ReminderAgent, ReminderData } from './reminder-agent';
+import { ReminderQueue } from '../jobs/reminder-queue';
 import { logger } from '../config/logger';
 
 /**
@@ -25,11 +26,13 @@ export class ConversationAgent extends BaseAgent implements IAgent {
 
   private dateTimeAgent: DateTimeAgent;
   private reminderAgent: ReminderAgent;
+  private reminderQueue: ReminderQueue;
 
   constructor() {
     super();
     this.dateTimeAgent = new DateTimeAgent();
     this.reminderAgent = new ReminderAgent();
+    this.reminderQueue = new ReminderQueue();
   }
 
   /**
@@ -176,6 +179,10 @@ export class ConversationAgent extends BaseAgent implements IAgent {
 
       const reminder = await this.reminderAgent.createReminder(reminderData);
 
+      // Schedule the reminder in the queue to be sent at the scheduled time
+      await this.reminderQueue.scheduleReminder(reminder, phoneNumber);
+      logger.info({ reminderId: reminder.id, scheduledTime: reminder.scheduledTime }, 'Reminder scheduled in queue');
+
       // Format confirmation
       const timeStr = this.dateTimeAgent.formatDateTime(parsedTime.scheduledTime);
       const confirmMsg = `done. I'll remind you to ${task} ${timeStr.toLowerCase()}.`;
@@ -310,6 +317,10 @@ export class ConversationAgent extends BaseAgent implements IAgent {
       // Delete the reminder
       const reminder = reminders[index];
       await this.reminderAgent.deleteReminder(reminder.id);
+
+      // Remove from queue if it was scheduled
+      await this.reminderQueue.cancelReminder(reminder.id);
+      logger.info({ reminderId: reminder.id }, 'Reminder cancelled and removed from queue');
 
       const cancelMsg = `done. cancelled: "${reminder.reminderText}"`;
 
