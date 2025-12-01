@@ -97,48 +97,11 @@ export class AgentRouter {
 
   /**
    * Determine which agent should handle the message
+   *
+   * After onboarding, ALL messages go to ConversationAgent (main orchestrator)
+   * ConversationAgent internally handles intent detection and routing
    */
   private async determineAgent(context: AgentContext): Promise<RoutingDecision> {
-    const message = context.message.toLowerCase().trim();
-
-    // Explicit commands
-    if (/^(remind|reminder|set reminder|create reminder)/i.test(message)) {
-      return {
-        agent: 'reminder',
-        confidence: 1.0,
-        reason: 'Explicit reminder command',
-      };
-    }
-
-    if (/^(split|expense|spent|paid|bill)/i.test(message)) {
-      return {
-        agent: 'splitwise',
-        confidence: 1.0,
-        reason: 'Explicit expense/split command',
-      };
-    }
-
-    // Pattern-based detection
-
-    // Reminder patterns: time expressions
-    if (/\b(tomorrow|today|tonight|morning|evening|afternoon|night|am|pm|:\d{2}|\d{1,2}:\d{2})\b/i.test(message)) {
-      return {
-        agent: 'reminder',
-        confidence: 0.85,
-        reason: 'Contains time/date expressions',
-      };
-    }
-
-    // Expense patterns: currency or numbers + context
-    if (/(₹|rs\.?|rupees?)\s*\d+|\d+\s*(₹|rs\.?|rupees?)/i.test(message) ||
-        (/\d{2,}/.test(message) && /(spent|paid|cost|bill|dinner|lunch|food)/i.test(message))) {
-      return {
-        agent: 'splitwise',
-        confidence: 0.80,
-        reason: 'Contains expense/payment context',
-      };
-    }
-
     // Ask each agent if they can handle
     for (const [type, agent] of this.agents) {
       if (type === 'onboarding') continue; // Skip onboarding
@@ -147,17 +110,17 @@ export class AgentRouter {
       if (canHandle) {
         return {
           agent: type,
-          confidence: 0.70,
-          reason: `Agent ${agent.name} indicated it can handle`,
+          confidence: 1.0,
+          reason: `Agent ${agent.name} can handle`,
         };
       }
     }
 
-    // Default: reminder agent (safest fallback)
+    // Default: conversation agent (main orchestrator for all post-onboarding messages)
     return {
-      agent: 'reminder',
-      confidence: 0.50,
-      reason: 'Default fallback',
+      agent: 'conversation',
+      confidence: 1.0,
+      reason: 'Default to conversation orchestrator',
     };
   }
 
