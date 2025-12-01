@@ -121,9 +121,6 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
       return { message: '', flowComplete: false };
     }
 
-    // Store name in flow data
-    await this.updateFlowData(userId, { name: firstName });
-
     // Generate light name tease
     const nameTease = this.generateNameTease(firstName);
 
@@ -134,18 +131,40 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
       intent: 'onboarding_complete',
     });
 
-    return { message: '', flowComplete: true };
+    // Complete onboarding immediately
+    logger.info({ userId, name: firstName }, 'Completing onboarding');
+
+    // Update user profile
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: firstName,
+        onboardingComplete: true,
+      },
+    });
+
+    // Switch to conversation agent (main orchestrator)
+    await this.agentStateService.setAgent(userId, 'conversation');
+
+    logger.info({ userId }, 'Onboarding completed successfully');
+
+    return {
+      message: '',
+      flowComplete: true,
+      shouldSwitchAgent: 'conversation',
+    };
   }
 
   /**
    * Complete onboarding and mark user as ready
+   * (Kept for backwards compatibility but not used in current flow)
    */
   private async completeOnboarding(
     _phoneNumber: string,
     userId: string,
     name: string
   ): Promise<AgentResponse> {
-    logger.info({ userId, name }, 'Completing onboarding');
+    logger.info({ userId, name }, 'Completing onboarding (legacy path)');
 
     // Update user profile
     await this.prisma.user.update({
@@ -165,7 +184,7 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
     logger.info({ userId }, 'Onboarding completed successfully');
 
     return {
-      message: '', // Already sent in collectName
+      message: '',
       flowComplete: true,
       shouldSwitchAgent: 'conversation',
     };
