@@ -2,6 +2,7 @@ import { AgentType, IAgent, AgentContext, AgentResponse } from '../types/agents'
 import { BaseAgent } from './base-agent';
 import { ReminderParser } from '../utils/reminder-parser';
 import { ReminderService } from '../services/reminder.service';
+import { TimeService } from '../services/time.service';
 import { logger } from '../config/logger';
 
 /**
@@ -19,11 +20,13 @@ export class ReminderAgent extends BaseAgent implements IAgent {
 
   private reminderParser: ReminderParser;
   private reminderService: ReminderService;
+  private timeService: TimeService;
 
   constructor() {
     super();
     this.reminderParser = new ReminderParser();
     this.reminderService = new ReminderService();
+    this.timeService = new TimeService();
   }
 
   /**
@@ -138,16 +141,8 @@ export class ReminderAgent extends BaseAgent implements IAgent {
         },
       });
 
-      // Format confirmation message
-      const timeStr = new Date(parsed.scheduledTime).toLocaleString('en-US', {
-        timeZone: 'Asia/Kolkata',
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      });
+      // Format confirmation message using TimeService
+      const timeStr = this.timeService.formatKolkataDateTime(parsed.scheduledTime);
 
       const confirmMsg = `✅ Reminder set for ${timeStr}\n\n"${parsed.text}"`;
 
@@ -202,15 +197,7 @@ export class ReminderAgent extends BaseAgent implements IAgent {
       // Format reminders list
       const remindersList = reminders
         .map((reminder, index) => {
-          const timeStr = new Date(reminder.scheduledTime).toLocaleString('en-US', {
-            timeZone: 'Asia/Kolkata',
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-          });
+          const timeStr = this.timeService.formatKolkataDateTime(reminder.scheduledTime);
           return `${index + 1}. ${timeStr}\n   "${reminder.reminderText}"`;
         })
         .join('\n\n');
@@ -267,15 +254,7 @@ export class ReminderAgent extends BaseAgent implements IAgent {
 
         const remindersList = reminders
           .map((reminder, index) => {
-            const timeStr = new Date(reminder.scheduledTime).toLocaleString('en-US', {
-              timeZone: 'Asia/Kolkata',
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true,
-            });
+            const timeStr = this.timeService.formatKolkataDateTime(reminder.scheduledTime);
             return `${index + 1}. ${timeStr} - "${reminder.reminderText}"`;
           })
           .join('\n');

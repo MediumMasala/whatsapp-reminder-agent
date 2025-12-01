@@ -1,5 +1,5 @@
 import { ParsedReminder } from '../types';
-import { env } from '../config/env';
+import { TimeService } from '../services/time.service';
 
 /**
  * Natural language reminder parser
@@ -10,8 +10,10 @@ import { env } from '../config/env';
  * - "tomorrow morning meeting"
  */
 export class ReminderParser {
-  constructor(_timezone: string = env.DEFAULT_TIMEZONE) {
-    // Timezone stored for potential future use
+  private timeService: TimeService;
+
+  constructor() {
+    this.timeService = new TimeService();
   }
 
   /**
@@ -142,44 +144,26 @@ export class ReminderParser {
     dateMatch: { daysFromNow: number } | null,
     timeMatch: { hours: number; minutes: number }
   ): Date {
-    // Get current time as Date object (system will use local time)
-    const now = new Date();
+    // Determine how many days from now
+    let daysFromNow = 0;
 
-    // Get the current date components in Asia/Kolkata timezone
-    const kolkataTimeString = now.toLocaleString('en-US', {
-      timeZone: env.DEFAULT_TIMEZONE,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    });
-
-    // Parse: "MM/DD/YYYY, HH:MM:SS"
-    const [datePart] = kolkataTimeString.split(', ');
-    const [month, day, year] = datePart.split('/').map(Number);
-
-    // Build target date in UTC but representing Kolkata time
-    // We'll use UTC methods to avoid timezone conversion issues
-    const targetDate = new Date(Date.UTC(year, month - 1, day, timeMatch.hours, timeMatch.minutes, 0, 0));
-
-    // Adjust for timezone offset (Asia/Kolkata is UTC+5:30)
-    // We need to subtract the offset to convert from Kolkata time to UTC
-    targetDate.setMinutes(targetDate.getMinutes() - 330); // 5.5 hours = 330 minutes
-
-    // Add days if specified
     if (dateMatch && dateMatch.daysFromNow > 0) {
-      targetDate.setDate(targetDate.getDate() + dateMatch.daysFromNow);
+      // Explicit "tomorrow" or other future date
+      daysFromNow = dateMatch.daysFromNow;
+    } else if (!dateMatch || dateMatch.daysFromNow === 0) {
+      // Check if time is in the past for today
+      if (this.timeService.isTimeInPastToday(timeMatch.hours, timeMatch.minutes)) {
+        // If time has passed today, schedule for tomorrow
+        daysFromNow = 1;
+      }
     }
 
-    // If time is in the past today and no explicit date was given, assume tomorrow
-    if (targetDate < now && (!dateMatch || dateMatch.daysFromNow === 0)) {
-      targetDate.setDate(targetDate.getDate() + 1);
-    }
-
-    return targetDate;
+    // Use TimeService to create the proper date
+    return this.timeService.createKolkataDateTime(
+      timeMatch.hours,
+      timeMatch.minutes,
+      daysFromNow
+    );
   }
 
   private extractReminderText(
