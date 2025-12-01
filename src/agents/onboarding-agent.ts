@@ -72,18 +72,11 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
   private async startOnboarding(phoneNumber: string, userId: string): Promise<void> {
     logger.info({ userId }, 'Starting onboarding flow');
 
-    // STEP 1: Send exact greeting
-    const greetingMsg = `hey, my name is Pin Me. How may I help you? How may I assist you?`;
+    // Simple intro and ask for name in one message
+    const greetingMsg = `hey, I'm Pin Me – your WhatsApp reminder buddy.\n\nwhat should I call you?`;
 
     await this.sendMessage(phoneNumber, userId, greetingMsg, {
       intent: 'onboarding_start',
-    });
-
-    // STEP 2: Immediately ask for name in a separate message
-    const nameAskMsg = `also, what should I call you? what's your name?`;
-
-    await this.sendMessage(phoneNumber, userId, nameAskMsg, {
-      intent: 'onboarding_ask_name',
     });
 
     await this.startFlow(userId, 'onboarding');
@@ -134,8 +127,8 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
     // Generate light name tease
     const nameTease = this.generateNameTease(firstName);
 
-    // Send confirmation with tease + brief explanation
-    const confirmMsg = `${firstName}, ${nameTease}\n\nI'm your WhatsApp reminder agent – tell me what you don't want to forget and I'll pin it for you.`;
+    // Send pun + brief explanation
+    const confirmMsg = `${nameTease}\n\nalright ${firstName}, just tell me what you don't want to forget and I'll pin it for you.`;
 
     await this.sendMessage(phoneNumber, userId, confirmMsg, {
       intent: 'onboarding_complete',
@@ -201,8 +194,8 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
     // Power/strong sounding names
     if (/^(vikram|arjun|rohan|aditya|karan)/i.test(lowerName)) {
       const powerTeases = [
-        "is such a power name. sounds like someone who's always late to meetings.",
-        "nice. that's a main-character energy name right there.",
+        "such a power name. sounds like someone who's always late to meetings.",
+        "nice. that's main-character energy right there.",
         "sounds like you're about to star in a Bollywood movie or forget your keys. probably both.",
       ];
       return powerTeases[Math.floor(Math.random() * powerTeases.length)];
@@ -211,7 +204,7 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
     // Soft/elegant names
     if (/^(priya|kavya|anjali|riya|sara|isha)/i.test(lowerName)) {
       const elegantTeases = [
-        "is such a strong main-character name, I love it.",
+        "such a strong main-character name, I love it.",
         "nice. sounds like someone who has their life together. let's fix that illusion.",
         "elegant choice. your parents clearly had good taste.",
       ];
