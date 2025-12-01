@@ -26,8 +26,12 @@ RUN npm run build
 # Remove dev dependencies to reduce image size
 RUN npm prune --production
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Expose port
 EXPOSE 3000
 
 # Start application (runs migrations and starts server)
-CMD ["npm", "start"]
+CMD ["/app/docker-entrypoint.sh"]
