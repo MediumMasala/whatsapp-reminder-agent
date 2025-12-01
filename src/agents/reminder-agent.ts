@@ -1,8 +1,7 @@
 import { AgentType, IAgent, AgentContext, AgentResponse } from '../types/agents';
 import { BaseAgent } from './base-agent';
-import { ReminderParser } from '../utils/reminder-parser';
+import { DateTimeAgent } from './datetime-agent';
 import { ReminderService } from '../services/reminder.service';
-import { TimeService } from '../services/time.service';
 import { logger } from '../config/logger';
 
 /**
@@ -18,15 +17,13 @@ export class ReminderAgent extends BaseAgent implements IAgent {
   readonly type: AgentType = 'reminder';
   readonly name: string = 'Reminder Agent';
 
-  private reminderParser: ReminderParser;
+  private dateTimeAgent: DateTimeAgent;
   private reminderService: ReminderService;
-  private timeService: TimeService;
 
   constructor() {
     super();
-    this.reminderParser = new ReminderParser();
+    this.dateTimeAgent = new DateTimeAgent();
     this.reminderService = new ReminderService();
-    this.timeService = new TimeService();
   }
 
   /**
@@ -101,8 +98,8 @@ export class ReminderAgent extends BaseAgent implements IAgent {
     message: string
   ): Promise<AgentResponse> {
     try {
-      // Parse the reminder from natural language
-      const parsed = this.reminderParser.parse(message);
+      // Parse date/time using DateTimeAgent
+      const parsed = this.dateTimeAgent.parseDateTime(message);
 
       if (!parsed || !parsed.scheduledTime) {
         await this.sendMessage(
@@ -117,7 +114,14 @@ export class ReminderAgent extends BaseAgent implements IAgent {
         };
       }
 
-      if (!parsed.text || parsed.text.trim().length === 0) {
+      // Extract reminder text by removing time/date expressions
+      let reminderText = message
+        .replace(new RegExp(parsed.timeExpression, 'gi'), '')
+        .replace(parsed.dateExpression ? new RegExp(parsed.dateExpression, 'gi') : '', '')
+        .replace(/\b(remind me to|remind me|to|at|on|-)\b/gi, ' ')
+        .trim();
+
+      if (!reminderText || reminderText.length === 0) {
         await this.sendMessage(
           phoneNumber,
           userId,
@@ -133,7 +137,7 @@ export class ReminderAgent extends BaseAgent implements IAgent {
       // Create the reminder
       const reminder = await this.reminderService.createReminder({
         userId,
-        reminderText: parsed.text,
+        reminderText,
         scheduledTime: parsed.scheduledTime,
         metadata: {
           originalMessage: message,
@@ -141,10 +145,10 @@ export class ReminderAgent extends BaseAgent implements IAgent {
         },
       });
 
-      // Format confirmation message using TimeService
-      const timeStr = this.timeService.formatKolkataDateTime(parsed.scheduledTime);
+      // Format confirmation message
+      const timeStr = this.dateTimeAgent.formatDateTime(parsed.scheduledTime);
 
-      const confirmMsg = `✅ Reminder set for ${timeStr}\n\n"${parsed.text}"`;
+      const confirmMsg = `✅ Reminder set for ${timeStr}\n\n"${reminderText}"`;
 
       await this.sendMessage(phoneNumber, userId, confirmMsg, {
         intent: 'reminder_created',
@@ -197,7 +201,7 @@ export class ReminderAgent extends BaseAgent implements IAgent {
       // Format reminders list
       const remindersList = reminders
         .map((reminder, index) => {
-          const timeStr = this.timeService.formatKolkataDateTime(reminder.scheduledTime);
+          const timeStr = this.dateTimeAgent.formatDateTime(reminder.scheduledTime);
           return `${index + 1}. ${timeStr}\n   "${reminder.reminderText}"`;
         })
         .join('\n\n');
@@ -254,7 +258,7 @@ export class ReminderAgent extends BaseAgent implements IAgent {
 
         const remindersList = reminders
           .map((reminder, index) => {
-            const timeStr = this.timeService.formatKolkataDateTime(reminder.scheduledTime);
+            const timeStr = this.dateTimeAgent.formatDateTime(reminder.scheduledTime);
             return `${index + 1}. ${timeStr} - "${reminder.reminderText}"`;
           })
           .join('\n');

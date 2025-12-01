@@ -3,7 +3,7 @@ import { User } from '@prisma/client';
 /**
  * Agent Types
  */
-export type AgentType = 'onboarding' | 'reminder' | 'splitwise';
+export type AgentType = 'onboarding' | 'reminder' | 'splitwise' | 'conversation' | 'datetime';
 
 /**
  * Agent Response

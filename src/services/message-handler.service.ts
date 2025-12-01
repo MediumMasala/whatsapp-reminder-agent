@@ -4,6 +4,7 @@ import { AgentRouter } from './agent-router.service';
 import { OnboardingAgent } from '../agents/onboarding-agent';
 import { ReminderAgent } from '../agents/reminder-agent';
 import { SplitwiseAgent } from '../agents/splitwise-agent';
+import { ConversationAgent } from '../agents/conversation-agent';
 import { AgentStateService } from './agent-state.service';
 import { logger } from '../config/logger';
 
@@ -21,10 +22,16 @@ export class MessageHandler {
     this.agentRouter = new AgentRouter();
     this.agentStateService = new AgentStateService();
 
-    // Register all agents
+    // Register all agents in priority order
+    // Onboarding has highest priority (checks if user setup is complete)
     this.agentRouter.registerAgent(new OnboardingAgent());
+
+    // Specific functionality agents
     this.agentRouter.registerAgent(new ReminderAgent());
     this.agentRouter.registerAgent(new SplitwiseAgent());
+
+    // Conversation agent is fallback (lowest priority, always matches)
+    this.agentRouter.registerAgent(new ConversationAgent());
 
     logger.info('Message handler initialized with all agents');
   }
