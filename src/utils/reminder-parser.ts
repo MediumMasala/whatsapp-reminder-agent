@@ -142,24 +142,40 @@ export class ReminderParser {
     dateMatch: { daysFromNow: number } | null,
     timeMatch: { hours: number; minutes: number }
   ): Date {
-    // Get current time in Asia/Kolkata timezone
-    const nowInKolkata = new Date().toLocaleString('en-US', {
+    // Get current time as Date object (system will use local time)
+    const now = new Date();
+
+    // Get the current date components in Asia/Kolkata timezone
+    const kolkataTimeString = now.toLocaleString('en-US', {
       timeZone: env.DEFAULT_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
     });
-    const now = new Date(nowInKolkata);
 
-    // Create target date in Asia/Kolkata timezone
-    const targetDate = new Date(now);
+    // Parse: "MM/DD/YYYY, HH:MM:SS"
+    const [datePart, timePart] = kolkataTimeString.split(', ');
+    const [month, day, year] = datePart.split('/').map(Number);
+    const [currentHour, currentMinute] = timePart.split(':').map(Number);
 
-    // Add days
-    if (dateMatch) {
+    // Build target date in UTC but representing Kolkata time
+    // We'll use UTC methods to avoid timezone conversion issues
+    const targetDate = new Date(Date.UTC(year, month - 1, day, timeMatch.hours, timeMatch.minutes, 0, 0));
+
+    // Adjust for timezone offset (Asia/Kolkata is UTC+5:30)
+    // We need to subtract the offset to convert from Kolkata time to UTC
+    targetDate.setMinutes(targetDate.getMinutes() - 330); // 5.5 hours = 330 minutes
+
+    // Add days if specified
+    if (dateMatch && dateMatch.daysFromNow > 0) {
       targetDate.setDate(targetDate.getDate() + dateMatch.daysFromNow);
     }
 
-    // Set time (hours and minutes are already in user's intended time)
-    targetDate.setHours(timeMatch.hours, timeMatch.minutes, 0, 0);
-
-    // If time is in the past today, assume tomorrow
+    // If time is in the past today and no explicit date was given, assume tomorrow
     if (targetDate < now && (!dateMatch || dateMatch.daysFromNow === 0)) {
       targetDate.setDate(targetDate.getDate() + 1);
     }

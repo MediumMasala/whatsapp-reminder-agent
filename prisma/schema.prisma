@@ -8,17 +8,20 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  phoneNumber   String         @unique @map("phone_number")
-  name          String?
-  timezone      String         @default("Asia/Kolkata")
-  isActive      Boolean        @default(true) @map("is_active")
-  metadata      Json?          // Store additional user preferences
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+  id                  String         @id @default(uuid())
+  phoneNumber         String         @unique @map("phone_number")
+  name                String?
+  onboardingComplete  Boolean        @default(false) @map("onboarding_complete")
+  timezone            String         @default("Asia/Kolkata")
+  isActive            Boolean        @default(true) @map("is_active")
+  metadata            Json?          // Store additional user preferences
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
 
   reminders     Reminder[]
   conversations Conversation[]
+  agentStates   AgentState[]
+  expenses      Expense[]
 
   @@index([phoneNumber])
   @@map("users")
@@ -68,4 +71,48 @@ model Conversation {
   @@index([userId, activeFlow])
   @@index([detectedIntent])
   @@map("conversations")
+}
+
+// Agent state management - tracks which agent is active and flow state
+model AgentState {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  currentAgent String   @map("current_agent") // 'onboarding' | 'reminder' | 'splitwise'
+  activeFlow   String?  @map("active_flow")   // Current multi-step flow name
+  flowData     Json?    @map("flow_data")     // Temporary data for ongoing flows
+  lastUpdated  DateTime @default(now()) @map("last_updated") @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId]) // One active state per user
+  @@index([userId])
+  @@map("agent_states")
+}
+
+// Expense tracking for Splitwise Agent
+model Expense {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  totalAmount Decimal  @map("total_amount") @db.Decimal(10, 2)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  participants ExpenseParticipant[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("expenses")
+}
+
+// Participants in expense splits
+model ExpenseParticipant {
+  id        String  @id @default(uuid())
+  expenseId String  @map("expense_id")
+  name      String
+  share     Decimal @db.Decimal(10, 2)
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+  @@map("expense_participants")
 }

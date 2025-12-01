@@ -1,290 +1,89 @@
 import { User } from '@prisma/client';
-import { ReminderParser } from '../utils/reminder-parser';
-import { ReminderService } from './reminder.service';
 import { ConversationService } from './conversation.service';
-import { WhatsAppService } from './whatsapp.service';
+import { AgentRouter } from './agent-router.service';
+import { OnboardingAgent } from '../agents/onboarding-agent';
+import { ReminderAgent } from '../agents/reminder-agent';
+import { SplitwiseAgent } from '../agents/splitwise-agent';
+import { AgentStateService } from './agent-state.service';
 import { logger } from '../config/logger';
-import { DetectedIntent } from '../types';
 
 /**
- * Core message handling and conversational flow logic
+ * Core message handling orchestrator
+ * Routes messages to appropriate agents via AgentRouter
  */
 export class MessageHandler {
-  private parser: ReminderParser;
-  private reminderService: ReminderService;
   private conversationService: ConversationService;
-  private whatsappService: WhatsAppService;
+  private agentRouter: AgentRouter;
+  private agentStateService: AgentStateService;
 
   constructor() {
-    this.parser = new ReminderParser();
-    this.reminderService = new ReminderService();
     this.conversationService = new ConversationService();
-    this.whatsappService = new WhatsAppService();
+    this.agentRouter = new AgentRouter();
+    this.agentStateService = new AgentStateService();
+
+    // Register all agents
+    this.agentRouter.registerAgent(new OnboardingAgent());
+    this.agentRouter.registerAgent(new ReminderAgent());
+    this.agentRouter.registerAgent(new SplitwiseAgent());
+
+    logger.info('Message handler initialized with all agents');
   }
 
   /**
-   * Handle user message and orchestrate response
+   * Handle incoming user message
+   * Routes to appropriate agent based on context and message content
    */
   async handleUserMessage(user: User, messageText: string): Promise<void> {
     logger.info({ userId: user.id, messageText }, 'Handling user message');
 
-    // Get conversation context for context-aware responses
-    const context = await this.conversationService.getContext(user.id, 5);
-
-    // Check if this is first interaction (no previous messages)
-    const isFirstInteraction = context.recentMessages.length === 0;
-
-    // Detect intent
-    const intent = this.detectIntent(messageText, context.lastIntent);
-
-    // Route to appropriate handler
-    switch (intent) {
-      case 'greeting':
-        // Only show welcome message on first interaction
-        if (isFirstInteraction) {
-          await this.handleGreeting(user);
-        } else {
-          // For returning users, just acknowledge and ask what they need
-          await this.sendMessage(user.phoneNumber, {
-            userId: user.id,
-            text: 'Hi! What would you like me to remember?',
-            intent: 'greeting',
-          });
-        }
-        break;
-
-      case 'create_reminder':
-        await this.handleCreateReminder(user, messageText);
-        break;
-
-      case 'list_reminders':
-        await this.handleListReminders(user);
-        break;
-
-      case 'cancel_reminder':
-        await this.handleCancelReminder(user, messageText);
-        break;
-
-      case 'help':
-        await this.handleHelp(user);
-        break;
-
-      default:
-        await this.handleUnknown(user, messageText);
-        break;
-    }
-  }
-
-  private detectIntent(message: string, _lastIntent?: DetectedIntent): DetectedIntent {
-    const lowerMessage = message.toLowerCase().trim();
-
-    // Greeting detection (should be first to catch initial interactions)
-    if (/^(hi|hello|hey|hola|namaste|good morning|good evening|greetings)$/i.test(lowerMessage)) {
-      return 'greeting';
-    }
-
-    // List reminders
-    if (/\b(list|show|my reminders|upcoming|what|all)\b/i.test(lowerMessage)) {
-      return 'list_reminders';
-    }
-
-    // Cancel reminder
-    if (/\b(cancel|delete|remove|stop)\b/i.test(lowerMessage)) {
-      return 'cancel_reminder';
-    }
-
-    // Help
-    if (/\b(help|how|what can)\b/i.test(lowerMessage)) {
-      return 'help';
-    }
-
-    // Create reminder
-    if (this.parser.isReminderRequest(message)) {
-      return 'create_reminder';
-    }
-
-    return 'unknown';
-  }
-
-  private async handleCreateReminder(user: User, messageText: string): Promise<void> {
     try {
-      // Parse reminder
-      const parsed = this.parser.parse(messageText);
-
-      if (!parsed) {
-        await this.sendMessage(user.phoneNumber, {
-          userId: user.id,
-          text: "I couldn't understand the time. Please try again with a format like:\n\n• Tomorrow at 9am\n• 7pm today\n• Tomorrow evening",
-          intent: 'create_reminder',
-        });
-        return;
-      }
-
-      // Create reminder
-      const reminder = await this.reminderService.createReminder({
-        userId: user.id,
-        reminderText: parsed.text,
-        scheduledTime: parsed.scheduledTime,
-        metadata: parsed.extractedData,
-      });
-
-      // Store interaction in conversation
+      // Store inbound message
       await this.conversationService.storeMessage({
         userId: user.id,
         direction: 'inbound',
         messageText,
-        detectedIntent: 'create_reminder',
-        extractedData: parsed.extractedData,
-        relatedReminderId: reminder.id,
       });
 
-      // Format confirmation message
-      const timeStr = this.formatDateTime(parsed.scheduledTime);
-      const confirmationMsg = `Reminder set for ${timeStr}`;
+      // Route to appropriate agent
+      const { agent, context } = await this.agentRouter.route(user, messageText);
 
-      await this.sendMessage(user.phoneNumber, {
-        userId: user.id,
-        text: confirmationMsg,
-        intent: 'create_reminder',
-        relatedReminderId: reminder.id,
-      });
+      logger.info(
+        { userId: user.id, agentType: agent.type, agentName: agent.name },
+        'Message routed to agent'
+      );
 
-      logger.info({ reminderId: reminder.id, userId: user.id }, 'Reminder created successfully');
+      // Agent processes the message
+      const response = await agent.handle(context);
+
+      // Handle agent switching if requested
+      if (response.shouldSwitchAgent) {
+        await this.agentStateService.switchAgent(user.id, response.shouldSwitchAgent);
+        logger.info(
+          { userId: user.id, newAgent: response.shouldSwitchAgent },
+          'Switched to new agent'
+        );
+      }
+
+      // If flow is complete, clear it
+      if (response.flowComplete) {
+        const state = await this.agentStateService.getState(user.id);
+        if (state?.activeFlow) {
+          await this.agentStateService.completeFlow(user.id);
+          logger.info({ userId: user.id }, 'Flow completed');
+        }
+      }
+
+      logger.info({ userId: user.id }, 'Message handled successfully');
     } catch (error) {
-      logger.error({ error, userId: user.id }, 'Error creating reminder');
-      await this.sendMessage(user.phoneNumber, {
-        userId: user.id,
-        text: 'Sorry, there was an error creating your reminder. Please try again.',
-        intent: 'create_reminder',
+      logger.error({ error, userId: user.id }, 'Error handling message');
+
+      // Send error message to user
+      const { whatsappService } = await import('./whatsapp.service');
+      const service = new whatsappService();
+      await service.sendTextMessage({
+        to: user.phoneNumber,
+        message: "Sorry, something went wrong. Please try again.",
       });
-    }
-  }
-
-  private async handleListReminders(user: User): Promise<void> {
-    const upcomingReminders = await this.reminderService.getUpcomingReminders(user.id);
-
-    if (upcomingReminders.length === 0) {
-      await this.sendMessage(user.phoneNumber, {
-        userId: user.id,
-        text: 'You have no upcoming reminders.\n\nCreate one by sending a message like "Remind me tomorrow at 9am to call doctor"',
-        intent: 'list_reminders',
-      });
-      return;
-    }
-
-    // Format reminders list
-    const remindersList = upcomingReminders
-      .slice(0, 10)
-      .map((r, idx) => {
-        const timeStr = this.formatDateTime(r.scheduledTime);
-        return `${idx + 1}. ${r.reminderText}\n   ⏰ ${timeStr}`;
-      })
-      .join('\n\n');
-
-    const message = `Your upcoming reminders:\n\n${remindersList}`;
-
-    await this.sendMessage(user.phoneNumber, {
-      userId: user.id,
-      text: message,
-      intent: 'list_reminders',
-    });
-  }
-
-  private async handleCancelReminder(user: User, _messageText: string): Promise<void> {
-    await this.sendMessage(user.phoneNumber, {
-      userId: user.id,
-      text: 'To cancel a reminder, please send "list" to see all reminders, then reply with the number to cancel.',
-      intent: 'cancel_reminder',
-    });
-  }
-
-  private async handleGreeting(user: User): Promise<void> {
-    const greetingText = `Hi, I am PinMe. What would you like me to remember?`;
-
-    await this.sendMessage(user.phoneNumber, {
-      userId: user.id,
-      text: greetingText,
-      intent: 'greeting',
-    });
-  }
-
-  private async handleHelp(user: User): Promise<void> {
-    const helpText = `I'm your reminder assistant! Here's what I can do:\n\n📝 Create reminders:\n"Remind me tomorrow at 9am to call doctor"\n"Pay rent at 7pm"\n\n📋 List reminders:\n"Show my reminders"\n"List all"\n\n❌ Cancel reminders:\n"Cancel reminder"\n\nJust talk naturally and I'll help you remember important things!`;
-
-    await this.sendMessage(user.phoneNumber, {
-      userId: user.id,
-      text: helpText,
-      intent: 'help',
-    });
-  }
-
-  private async handleUnknown(user: User, messageText: string): Promise<void> {
-    // Get context to check if we're in an active flow
-    const context = await this.conversationService.getActiveReminderContext(user.id);
-
-    if (context.hasActiveReminderFlow) {
-      // User might be continuing a reminder flow
-      await this.handleCreateReminder(user, messageText);
-    } else {
-      await this.sendMessage(user.phoneNumber, {
-        userId: user.id,
-        text: "I'm not sure what you mean. Try:\n\n• Setting a reminder: \"Tomorrow at 9am call doctor\"\n• Viewing reminders: \"List my reminders\"\n• Getting help: \"Help\"",
-        intent: 'unknown',
-      });
-    }
-  }
-
-  private async sendMessage(
-    phoneNumber: string,
-    data: {
-      userId: string;
-      text: string;
-      intent?: DetectedIntent;
-      relatedReminderId?: string;
-    }
-  ): Promise<void> {
-    const result = await this.whatsappService.sendTextMessage({
-      to: phoneNumber,
-      message: data.text,
-    });
-
-    // Store outbound message in conversation history
-    await this.conversationService.storeMessage({
-      userId: data.userId,
-      direction: 'outbound',
-      messageText: data.text,
-      whatsappMessageId: result.messageId,
-      detectedIntent: data.intent,
-      relatedReminderId: data.relatedReminderId,
-    });
-  }
-
-  private formatDateTime(date: Date): string {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const isToday = date.toDateString() === now.toDateString();
-    const isTomorrow = date.toDateString() === tomorrow.toDateString();
-
-    const timeStr = date.toLocaleTimeString('en-IN', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: 'Asia/Kolkata',
-    });
-
-    if (isToday) {
-      return `Today at ${timeStr}`;
-    } else if (isTomorrow) {
-      return `Tomorrow at ${timeStr}`;
-    } else {
-      const dateStr = date.toLocaleDateString('en-IN', {
-        month: 'short',
-        day: 'numeric',
-        timeZone: 'Asia/Kolkata',
-      });
-      return `${dateStr} at ${timeStr}`;
     }
   }
 
