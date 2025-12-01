@@ -2,8 +2,6 @@ import { User } from '@prisma/client';
 import { ConversationService } from './conversation.service';
 import { AgentRouter } from './agent-router.service';
 import { OnboardingAgent } from '../agents/onboarding-agent';
-import { ReminderAgent } from '../agents/reminder-agent';
-import { SplitwiseAgent } from '../agents/splitwise-agent';
 import { ConversationAgent } from '../agents/conversation-agent';
 import { AgentStateService } from './agent-state.service';
 import { logger } from '../config/logger';
@@ -11,6 +9,12 @@ import { logger } from '../config/logger';
 /**
  * Core message handling orchestrator
  * Routes messages to appropriate agents via AgentRouter
+ *
+ * Agent Architecture:
+ * 1. OnboardingAgent - Handles first-time user setup only
+ * 2. ConversationAgent - Main orchestrator, handles ALL user interaction after onboarding
+ *    - Uses DateTimeAgent internally for time parsing
+ *    - Uses ReminderAgent internally for storage (CRUD)
  */
 export class MessageHandler {
   private conversationService: ConversationService;
@@ -22,18 +26,14 @@ export class MessageHandler {
     this.agentRouter = new AgentRouter();
     this.agentStateService = new AgentStateService();
 
-    // Register all agents in priority order
+    // Register user-facing agents only
     // Onboarding has highest priority (checks if user setup is complete)
     this.agentRouter.registerAgent(new OnboardingAgent());
 
-    // Specific functionality agents
-    this.agentRouter.registerAgent(new ReminderAgent());
-    this.agentRouter.registerAgent(new SplitwiseAgent());
-
-    // Conversation agent is fallback (lowest priority, always matches)
+    // Conversation agent is the main orchestrator (handles everything after onboarding)
     this.agentRouter.registerAgent(new ConversationAgent());
 
-    logger.info('Message handler initialized with all agents');
+    logger.info('Message handler initialized with OnboardingAgent and ConversationAgent');
   }
 
   /**

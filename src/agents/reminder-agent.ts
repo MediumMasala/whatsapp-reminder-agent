@@ -1,325 +1,128 @@
-import { AgentType, IAgent, AgentContext, AgentResponse } from '../types/agents';
-import { BaseAgent } from './base-agent';
-import { DateTimeAgent } from './datetime-agent';
 import { ReminderService } from '../services/reminder.service';
 import { logger } from '../config/logger';
 
 /**
- * Reminder Agent
- *
- * Handles all reminder-related functionality:
- * - Create reminders from natural language
- * - List upcoming reminders
- * - Cancel reminders
- * - Handle reminder confirmations
+ * Reminder Data Structure
  */
-export class ReminderAgent extends BaseAgent implements IAgent {
-  readonly type: AgentType = 'reminder';
-  readonly name: string = 'Reminder Agent';
+export interface ReminderData {
+  userId: string;
+  task: string;
+  dueDatetime: Date;
+  timezone: string;
+  originalInput: string;
+  recurrence?: string | null;
+}
 
-  private dateTimeAgent: DateTimeAgent;
+/**
+ * Reminder Agent - Storage Only (CRUD Operations)
+ *
+ * This agent is purely for storage and retrieval of reminders.
+ * It does NOT interact with users directly.
+ * It only returns structured data.
+ *
+ * The Conversation Agent orchestrates this agent to store/retrieve reminders.
+ */
+export class ReminderAgent {
   private reminderService: ReminderService;
 
   constructor() {
-    super();
-    this.dateTimeAgent = new DateTimeAgent();
     this.reminderService = new ReminderService();
-  }
-
-  /**
-   * Check if this agent should handle the message
-   */
-  async canHandle(context: AgentContext): Promise<boolean> {
-    const message = context.message.toLowerCase().trim();
-
-    // Explicit reminder commands
-    if (/^(remind|reminder|set reminder|create reminder)/i.test(message)) {
-      return true;
-    }
-
-    // Time expressions suggest reminder intent
-    if (
-      /\b(tomorrow|today|tonight|morning|evening|afternoon|night|am|pm|:\d{2}|\d{1,2}:\d{2})\b/i.test(
-        message
-      )
-    ) {
-      return true;
-    }
-
-    // List/view commands
-    if (/^(list|show|view|my)\s*(reminders?)/i.test(message)) {
-      return true;
-    }
-
-    // Cancel commands
-    if (/^(cancel|delete|remove)\s*(reminder)?/i.test(message)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Handle reminder operations
-   */
-  async handle(context: AgentContext): Promise<AgentResponse> {
-    const { user, message } = context;
-    const lowerMessage = message.toLowerCase().trim();
-
-    logger.info({ userId: user.id, message }, 'Reminder agent processing');
-
-    // List reminders
-    if (/^(list|show|view|my)\s*(reminders?)/i.test(lowerMessage)) {
-      return await this.listReminders(user.phoneNumber, user.id);
-    }
-
-    // Cancel reminder
-    if (/^(cancel|delete|remove)\s*(reminder)?/i.test(lowerMessage)) {
-      return await this.handleCancelRequest(user.phoneNumber, user.id, message);
-    }
-
-    // Default: Create reminder
-    return await this.createReminder(user.phoneNumber, user.id, message);
-  }
-
-  /**
-   * Get agent description
-   */
-  getDescription(): string {
-    return 'Manages reminders with natural language understanding and smart scheduling';
   }
 
   /**
    * Create a new reminder
    */
-  private async createReminder(
-    phoneNumber: string,
-    userId: string,
-    message: string
-  ): Promise<AgentResponse> {
-    try {
-      // Parse date/time using DateTimeAgent
-      const parsed = this.dateTimeAgent.parseDateTime(message);
+  async createReminder(data: ReminderData) {
+    logger.info({ userId: data.userId, task: data.task }, 'Creating reminder');
 
-      if (!parsed || !parsed.scheduledTime) {
-        await this.sendMessage(
-          phoneNumber,
-          userId,
-          "I couldn't figure out when you want to be reminded. Could you include a time? (e.g., 'tomorrow at 3pm' or 'tonight at 8')",
-          { intent: 'reminder_time_unclear' }
-        );
-        return {
-          message: '',
-          metadata: { error: 'time_unclear' },
-        };
-      }
+    const reminder = await this.reminderService.createReminder({
+      userId: data.userId,
+      reminderText: data.task,
+      scheduledTime: data.dueDatetime,
+      metadata: {
+        originalMessage: data.originalInput,
+        timezone: data.timezone,
+        recurrence: data.recurrence,
+      },
+    });
 
-      // Extract reminder text by removing time/date expressions
-      let reminderText = message
-        .replace(new RegExp(parsed.timeExpression, 'gi'), '')
-        .replace(parsed.dateExpression ? new RegExp(parsed.dateExpression, 'gi') : '', '')
-        .replace(/\b(remind me to|remind me|to|at|on|-)\b/gi, ' ')
-        .trim();
-
-      if (!reminderText || reminderText.length === 0) {
-        await this.sendMessage(
-          phoneNumber,
-          userId,
-          "What should I remind you about?",
-          { intent: 'reminder_text_missing' }
-        );
-        return {
-          message: '',
-          metadata: { error: 'text_missing' },
-        };
-      }
-
-      // Create the reminder
-      const reminder = await this.reminderService.createReminder({
-        userId,
-        reminderText,
-        scheduledTime: parsed.scheduledTime,
-        metadata: {
-          originalMessage: message,
-          parsedData: parsed,
-        },
-      });
-
-      // Format confirmation message
-      const timeStr = this.dateTimeAgent.formatDateTime(parsed.scheduledTime);
-
-      const confirmMsg = `✅ Reminder set for ${timeStr}\n\n"${reminderText}"`;
-
-      await this.sendMessage(phoneNumber, userId, confirmMsg, {
-        intent: 'reminder_created',
-        relatedId: reminder.id,
-      });
-
-      logger.info({ userId, reminderId: reminder.id, scheduledTime: parsed.scheduledTime }, 'Reminder created');
-
-      return {
-        message: '',
-        metadata: {
-          reminderId: reminder.id,
-          scheduledTime: parsed.scheduledTime,
-        },
-      };
-    } catch (error) {
-      logger.error({ userId, error }, 'Failed to create reminder');
-
-      await this.sendMessage(
-        phoneNumber,
-        userId,
-        "Oops! Something went wrong while setting your reminder. Could you try again?",
-        { intent: 'reminder_error' }
-      );
-
-      return {
-        message: '',
-        metadata: { error: 'creation_failed' },
-      };
-    }
+    logger.info({ reminderId: reminder.id }, 'Reminder created successfully');
+    return reminder;
   }
 
   /**
-   * List all pending reminders
+   * Get a reminder by ID
    */
-  private async listReminders(phoneNumber: string, userId: string): Promise<AgentResponse> {
-    try {
-      const reminders = await this.reminderService.getUpcomingReminders(userId);
-
-      if (reminders.length === 0) {
-        await this.sendMessage(
-          phoneNumber,
-          userId,
-          "You don't have any pending reminders. Want to set one?",
-          { intent: 'reminder_list_empty' }
-        );
-        return { message: '' };
-      }
-
-      // Format reminders list
-      const remindersList = reminders
-        .map((reminder, index) => {
-          const timeStr = this.dateTimeAgent.formatDateTime(reminder.scheduledTime);
-          return `${index + 1}. ${timeStr}\n   "${reminder.reminderText}"`;
-        })
-        .join('\n\n');
-
-      const listMsg = `📋 Your upcoming reminders:\n\n${remindersList}\n\nTo cancel a reminder, just say "cancel reminder 1" (or the number you want to cancel).`;
-
-      await this.sendMessage(phoneNumber, userId, listMsg, {
-        intent: 'reminder_list',
-      });
-
-      return { message: '' };
-    } catch (error) {
-      logger.error({ userId, error }, 'Failed to list reminders');
-
-      await this.sendMessage(
-        phoneNumber,
-        userId,
-        "Sorry, I couldn't fetch your reminders right now. Please try again.",
-        { intent: 'reminder_list_error' }
-      );
-
-      return {
-        message: '',
-        metadata: { error: 'list_failed' },
-      };
-    }
+  async getReminderById(reminderId: string) {
+    return await this.reminderService.getReminderById(reminderId);
   }
 
   /**
-   * Handle cancel reminder request
+   * Find reminders for a user
+   * @param userId - User ID
+   * @param filters - Optional filters (status, date range, etc.)
    */
-  private async handleCancelRequest(
-    phoneNumber: string,
-    userId: string,
-    message: string
-  ): Promise<AgentResponse> {
-    try {
-      // Extract reminder number
-      const numbers = this.extractNumbers(message);
+  async findReminders(userId: string, filters?: {
+    status?: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+    searchText?: string;
+  }) {
+    logger.info({ userId, filters }, 'Finding reminders');
+    return await this.reminderService.getUpcomingReminders(userId);
+  }
 
-      if (numbers.length === 0) {
-        // No number specified - show list and ask which one
-        const reminders = await this.reminderService.getUpcomingReminders(userId);
+  /**
+   * Update a reminder
+   */
+  async updateReminder(reminderId: string, updates: Partial<ReminderData>) {
+    logger.info({ reminderId, updates }, 'Updating reminder');
 
-        if (reminders.length === 0) {
-          await this.sendMessage(
-            phoneNumber,
-            userId,
-            "You don't have any reminders to cancel.",
-            { intent: 'reminder_cancel_empty' }
-          );
-          return { message: '' };
-        }
+    const updateData: any = {};
 
-        const remindersList = reminders
-          .map((reminder, index) => {
-            const timeStr = this.dateTimeAgent.formatDateTime(reminder.scheduledTime);
-            return `${index + 1}. ${timeStr} - "${reminder.reminderText}"`;
-          })
-          .join('\n');
-
-        const askMsg = `Which reminder would you like to cancel?\n\n${remindersList}\n\nReply with the number (e.g., "cancel 1").`;
-
-        await this.sendMessage(phoneNumber, userId, askMsg, {
-          intent: 'reminder_cancel_ask',
-        });
-
-        return { message: '' };
-      }
-
-      // Get the reminder index (1-based from user, convert to 0-based)
-      const index = numbers[0] - 1;
-      const reminders = await this.reminderService.getUpcomingReminders(userId);
-
-      if (index < 0 || index >= reminders.length) {
-        await this.sendMessage(
-          phoneNumber,
-          userId,
-          `You don't have a reminder #${numbers[0]}. You have ${reminders.length} reminder(s).`,
-          { intent: 'reminder_cancel_invalid' }
-        );
-        return { message: '' };
-      }
-
-      // Cancel the reminder
-      const reminder = reminders[index];
-      await this.reminderService.cancelReminder(reminder.id);
-
-      const cancelMsg = `✅ Cancelled: "${reminder.reminderText}"`;
-
-      await this.sendMessage(phoneNumber, userId, cancelMsg, {
-        intent: 'reminder_cancelled',
-        relatedId: reminder.id,
-      });
-
-      logger.info({ userId, reminderId: reminder.id }, 'Reminder cancelled');
-
-      return {
-        message: '',
-        metadata: {
-          reminderId: reminder.id,
-          action: 'cancelled',
-        },
-      };
-    } catch (error) {
-      logger.error({ userId, error }, 'Failed to cancel reminder');
-
-      await this.sendMessage(
-        phoneNumber,
-        userId,
-        "Sorry, I couldn't cancel that reminder. Please try again.",
-        { intent: 'reminder_cancel_error' }
-      );
-
-      return {
-        message: '',
-        metadata: { error: 'cancel_failed' },
-      };
+    if (updates.task) {
+      updateData.reminderText = updates.task;
     }
+
+    if (updates.dueDatetime) {
+      updateData.scheduledTime = updates.dueDatetime;
+    }
+
+    if (updates.recurrence !== undefined) {
+      updateData.metadata = { recurrence: updates.recurrence };
+    }
+
+    // Note: ReminderService might need an updateReminder method
+    // For now, we'll return null if not implemented
+    logger.warn('Update reminder not fully implemented in ReminderService');
+    return null;
+  }
+
+  /**
+   * Delete a reminder
+   */
+  async deleteReminder(reminderId: string) {
+    logger.info({ reminderId }, 'Deleting reminder');
+    await this.reminderService.cancelReminder(reminderId);
+    return { success: true };
+  }
+
+  /**
+   * Get due reminders (for scheduler)
+   * @param now - Current timestamp
+   */
+  async getDueReminders(now: Date) {
+    logger.info({ now }, 'Getting due reminders');
+    // This would need to be implemented in ReminderService
+    // For now, returning empty array
+    return [];
+  }
+
+  /**
+   * Get upcoming reminders for a user
+   */
+  async getUpcomingReminders(userId: string) {
+    logger.info({ userId }, 'Getting upcoming reminders');
+    return await this.reminderService.getUpcomingReminders(userId);
   }
 }

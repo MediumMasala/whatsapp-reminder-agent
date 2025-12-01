@@ -166,15 +166,15 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
     // Complete the flow
     await this.completeFlow(userId);
 
-    // Switch to reminder agent as default
-    await this.agentStateService.setAgent(userId, 'reminder');
+    // Switch to conversation agent (main orchestrator)
+    await this.agentStateService.setAgent(userId, 'conversation');
 
     logger.info({ userId }, 'Onboarding completed successfully');
 
     return {
       message: '', // Already sent in collectName
       flowComplete: true,
-      shouldSwitchAgent: 'reminder',
+      shouldSwitchAgent: 'conversation',
     };
   }
 
