@@ -40,8 +40,19 @@ export class AgentStateService {
     logger.info({ userId, flowName }, 'Starting flow');
 
     const state = await this.getState(userId);
+
+    // If no state exists, create it with onboarding agent as default
     if (!state) {
-      throw new Error('Agent state not found. Set agent first.');
+      logger.info({ userId }, 'No agent state found, creating with onboarding agent');
+      return this.prisma.agentState.create({
+        data: {
+          userId,
+          currentAgent: 'onboarding',
+          activeFlow: flowName,
+          flowData: initialData,
+          lastUpdated: new Date(),
+        },
+      });
     }
 
     return this.prisma.agentState.update({
