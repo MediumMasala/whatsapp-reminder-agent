@@ -82,7 +82,16 @@ export class MessageHandler {
 
       logger.info({ userId: user.id }, 'Message handled successfully');
     } catch (error) {
-      logger.error({ error, userId: user.id }, 'Error handling message');
+      // Log full error details
+      logger.error(
+        {
+          userId: user.id,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStack: error instanceof Error ? error.stack : undefined,
+          errorType: error?.constructor?.name,
+        },
+        'Error handling message'
+      );
 
       // Send error message to user
       const { WhatsAppService } = await import('./whatsapp.service');
