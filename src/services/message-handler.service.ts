@@ -78,8 +78,8 @@ export class MessageHandler {
       logger.error({ error, userId: user.id }, 'Error handling message');
 
       // Send error message to user
-      const { whatsappService } = await import('./whatsapp.service');
-      const service = new whatsappService();
+      const { WhatsAppService } = await import('./whatsapp.service');
+      const service = new WhatsAppService();
       await service.sendTextMessage({
         to: user.phoneNumber,
         message: "Sorry, something went wrong. Please try again.",

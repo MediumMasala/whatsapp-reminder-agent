@@ -131,7 +131,7 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
    * Complete onboarding and mark user as ready
    */
   private async completeOnboarding(
-    phoneNumber: string,
+    _phoneNumber: string,
     userId: string,
     name: string
   ): Promise<AgentResponse> {

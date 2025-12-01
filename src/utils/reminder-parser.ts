@@ -158,9 +158,8 @@ export class ReminderParser {
     });
 
     // Parse: "MM/DD/YYYY, HH:MM:SS"
-    const [datePart, timePart] = kolkataTimeString.split(', ');
+    const [datePart] = kolkataTimeString.split(', ');
     const [month, day, year] = datePart.split('/').map(Number);
-    const [currentHour, currentMinute] = timePart.split(':').map(Number);
 
     // Build target date in UTC but representing Kolkata time
     // We'll use UTC methods to avoid timezone conversion issues

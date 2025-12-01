@@ -101,7 +101,7 @@ export class ReminderAgent extends BaseAgent implements IAgent {
       // Parse the reminder from natural language
       const parsed = this.reminderParser.parse(message);
 
-      if (!parsed.scheduledTime) {
+      if (!parsed || !parsed.scheduledTime) {
         await this.sendMessage(
           phoneNumber,
           userId,

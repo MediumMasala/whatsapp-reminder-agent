@@ -86,7 +86,7 @@ export class AgentStateService {
       where: { userId },
       data: {
         activeFlow: null,
-        flowData: null,
+        flowData: {},
         lastUpdated: new Date(),
       },
     });
@@ -112,12 +112,12 @@ export class AgentStateService {
         userId,
         currentAgent: newAgent,
         activeFlow: flowName || null,
-        flowData: null,
+        flowData: {},
       },
       update: {
         currentAgent: newAgent,
         activeFlow: flowName || null,
-        flowData: flowName ? {} : null,
+        flowData: {},
         lastUpdated: new Date(),
       },
     });

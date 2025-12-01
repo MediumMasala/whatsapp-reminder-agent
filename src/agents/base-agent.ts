@@ -65,7 +65,7 @@ export abstract class BaseAgent implements IAgent {
       direction: 'outbound',
       messageText: message,
       whatsappMessageId: result.messageId,
-      detectedIntent: metadata?.intent,
+      detectedIntent: metadata?.intent as any,
       relatedReminderId: metadata?.relatedId,
     });
   }
