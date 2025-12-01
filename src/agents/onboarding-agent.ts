@@ -72,10 +72,18 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
   private async startOnboarding(phoneNumber: string, userId: string): Promise<void> {
     logger.info({ userId }, 'Starting onboarding flow');
 
-    const greetingMsg = `👋 Hey there! Welcome to your new productivity companion.\n\nI'm here to help you remember things and split expenses with friends.\n\nBut first, what should I call you?`;
+    // STEP 1: Send exact greeting
+    const greetingMsg = `hey, my name is Pin Me. How may I help you? How may I assist you?`;
 
     await this.sendMessage(phoneNumber, userId, greetingMsg, {
       intent: 'onboarding_start',
+    });
+
+    // STEP 2: Immediately ask for name in a separate message
+    const nameAskMsg = `also, what should I call you? what's your name?`;
+
+    await this.sendMessage(phoneNumber, userId, nameAskMsg, {
+      intent: 'onboarding_ask_name',
     });
 
     await this.startFlow(userId, 'onboarding');
@@ -89,36 +97,45 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
     userId: string,
     message: string
   ): Promise<AgentResponse> {
-    const name = message.trim();
+    let name = message.trim();
+
+    // Extract first name from common patterns
+    name = name
+      .replace(/^(my name is|i'm|i am|this is|call me)\s+/i, '')
+      .trim();
+
+    // Get first name if multiple words
+    const firstName = name.split(/\s+/)[0];
 
     // Basic validation
-    if (name.length < 2) {
+    if (firstName.length < 2) {
       await this.sendMessage(
         phoneNumber,
         userId,
-        "Hmm, that seems a bit short. Could you tell me your full name?",
+        "I promise I'm not your HR. just tell me your name 😄",
         { intent: 'onboarding_name_retry' }
       );
       return { message: '', flowComplete: false };
     }
 
-    if (name.length > 50) {
+    if (firstName.length > 30) {
       await this.sendMessage(
         phoneNumber,
         userId,
-        "That's quite a mouthful! Could you give me a shorter version I can use?",
+        "that's... quite the name. maybe just give me the short version?",
         { intent: 'onboarding_name_retry' }
       );
       return { message: '', flowComplete: false };
     }
 
     // Store name in flow data
-    await this.updateFlowData(userId, { name });
+    await this.updateFlowData(userId, { name: firstName });
 
-    // Generate sass comment based on name
-    const sassComment = this.generateSassComment(name);
+    // Generate light name tease
+    const nameTease = this.generateNameTease(firstName);
 
-    const confirmMsg = `Nice to meet you, ${name}! ${sassComment}\n\nYou're all set! 🎉\n\nYou can now:\n• Set reminders (just tell me when and what)\n• Split expenses with friends (tell me who paid and how much)\n\nWhat would you like to do?`;
+    // Send confirmation with tease + brief explanation
+    const confirmMsg = `${firstName}, ${nameTease}\n\nI'm your WhatsApp reminder agent – tell me what you don't want to forget and I'll pin it for you.`;
 
     await this.sendMessage(phoneNumber, userId, confirmMsg, {
       intent: 'onboarding_complete',
@@ -162,103 +179,53 @@ export class OnboardingAgent extends BaseAgent implements IAgent {
   }
 
   /**
-   * Generate culturally-aware sass based on name
-   * Uses simple heuristics to detect name origin and add personality
+   * Generate light, playful name tease
+   * Short, snappy, friendly - like a college senior teasing a junior
    */
-  private generateSassComment(name: string): string {
+  private generateNameTease(name: string): string {
     const lowerName = name.toLowerCase();
 
-    // Indian names
-    if (
-      /^(raj|amit|priya|anjali|vikram|sanjay|deepak|neha|pooja|rohit|arjun|kavya|aditi|aarav|ishaan|yash|riya|saanvi|krishna|shiva|lakshmi|ganesh)/.test(
-        lowerName
-      )
-    ) {
-      const indianSass = [
-        "Namaste! I promise I won't judge you for forgetting things... much. 🙏",
-        "Chai time reminders coming right up! ☕",
-        "I'll be more reliable than your neighborhood chaiwala! 😄",
-        "Let's make sure you never miss cricket match timings again! 🏏",
+    // Common Indian names - light, friendly teasing
+    const commonIndianNames = ['raj', 'amit', 'priya', 'rahul', 'anjali', 'vikram', 'neha', 'rohit', 'arjun', 'yash', 'riya', 'aarav'];
+    if (commonIndianNames.some(n => lowerName.startsWith(n))) {
+      const teases = [
+        "nice. your parents definitely didn't overthink that one 😄",
+        "solid name. your parents clearly speedran the baby-naming process.",
+        "elite default setting for Indian kids 😂",
+        "classic choice. your parents went with the crowd favourite.",
+        "huh. sounds like someone with way too many pending tasks already.",
       ];
-      return indianSass[Math.floor(Math.random() * indianSass.length)];
+      return teases[Math.floor(Math.random() * teases.length)];
     }
 
-    // Western names
-    if (
-      /^(john|jane|michael|emily|david|sarah|chris|jessica|alex|emma|james|olivia|william|sophia)/.test(
-        lowerName
-      )
-    ) {
-      const westernSass = [
-        "Awesome! I'll help you stay on top of things, unlike your New Year's resolutions. 😉",
-        "Great! I'll be your digital sticky note that actually sticks around. 📝",
-        "Perfect! Let's get you organized, shall we? ✨",
+    // Power/strong sounding names
+    if (/^(vikram|arjun|rohan|aditya|karan)/i.test(lowerName)) {
+      const powerTeases = [
+        "is such a power name. sounds like someone who's always late to meetings.",
+        "nice. that's a main-character energy name right there.",
+        "sounds like you're about to star in a Bollywood movie or forget your keys. probably both.",
       ];
-      return westernSass[Math.floor(Math.random() * westernSass.length)];
+      return powerTeases[Math.floor(Math.random() * powerTeases.length)];
     }
 
-    // Arabic names
-    if (/^(mohammed|ahmed|fatima|ali|omar|aisha|hassan|zainab|khalid|maryam)/.test(lowerName)) {
-      const arabicSass = [
-        "Marhaba! I'll make sure you're always on time, even for Friday prayers! 🕌",
-        "Welcome! I'll be more dependable than your morning qahwa. ☕",
-        "Ahlan! Let's keep your schedule as organized as your spice collection! 🌶️",
+    // Soft/elegant names
+    if (/^(priya|kavya|anjali|riya|sara|isha)/i.test(lowerName)) {
+      const elegantTeases = [
+        "is such a strong main-character name, I love it.",
+        "nice. sounds like someone who has their life together. let's fix that illusion.",
+        "elegant choice. your parents clearly had good taste.",
       ];
-      return arabicSass[Math.floor(Math.random() * arabicSass.length)];
+      return elegantTeases[Math.floor(Math.random() * elegantTeases.length)];
     }
 
-    // Chinese names
-    if (/^(wei|li|wang|zhang|chen|liu|yang|huang|zhao|wu|xu|sun|ma|zhu|hu)/.test(lowerName)) {
-      const chineseSass = [
-        "你好! I'll help you remember everything, no fortune cookie needed! 🥠",
-        "Welcome! I'm like your personal feng shui for time management! ⚡",
-        "Great! I'll keep you organized like a perfectly balanced dim sum platter! 🥟",
-      ];
-      return chineseSass[Math.floor(Math.random() * chineseSass.length)];
-    }
-
-    // African names
-    if (
-      /^(amara|kofi|nia|kwame|zuri|jabari|ayana|malik|imani|sekou|nala|chiamaka)/.test(lowerName)
-    ) {
-      const africanSass = [
-        "Jambo! I'll help you stay organized with the wisdom of your ancestors... and better tech! 😄",
-        "Welcome! I'll be your digital griot, keeping track of everything! 📱",
-        "Habari! Let's make sure you never miss a beat! 🎵",
-      ];
-      return africanSass[Math.floor(Math.random() * africanSass.length)];
-    }
-
-    // Latin American names
-    if (
-      /^(carlos|maria|jose|ana|luis|carmen|juan|elena|miguel|sofia|diego|isabella)/.test(lowerName)
-    ) {
-      const latinSass = [
-        "¡Hola! I'll help you remember things faster than you can say 'mañana'! 🌮",
-        "Welcome! I'll be more reliable than your abuela's cooking schedule! 👵",
-        "¡Perfecto! Let's keep you on time, even if the party starts 'later'! 🎉",
-      ];
-      return latinSass[Math.floor(Math.random() * latinSass.length)];
-    }
-
-    // Japanese/Korean names
-    if (/^(yuki|hiro|sakura|kenji|akira|yuki|min|ji|soo|hye|jun|kim|park|lee)/.test(lowerName)) {
-      const asianSass = [
-        "こんにちは! I'll help you stay kawaii-level organized! ✨",
-        "Welcome! I'll be your personal productivity sensei! 🥋",
-        "Perfect! Let's keep you on schedule like a Japanese train! 🚄",
-      ];
-      return asianSass[Math.floor(Math.random() * asianSass.length)];
-    }
-
-    // Default generic sass
-    const genericSass = [
-      "Great name! I'll help you remember all the things you're about to forget! 😉",
-      "Perfect! I'll be your memory's best friend! 🧠",
-      "Awesome! Let's make sure you never miss a thing! ⏰",
-      "Love it! I'll keep you organized and on track! 🎯",
-      "Nice! I'll be like that friend who always remembers your birthday! 🎂",
+    // Default - generic light teasing
+    const genericTeases = [
+      "cool name. I'll try not to forget it like you forget everything else.",
+      "nice! sounds like someone who definitely needs a reminder app.",
+      "solid choice. your parents clearly thought that through.",
+      "I like it! now let's make sure you remember stuff for once.",
+      "huh. sounds like you've got your hands full already.",
     ];
-    return genericSass[Math.floor(Math.random() * genericSass.length)];
+    return genericTeases[Math.floor(Math.random() * genericTeases.length)];
   }
 }
