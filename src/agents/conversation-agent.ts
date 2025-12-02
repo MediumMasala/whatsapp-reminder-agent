@@ -3,6 +3,7 @@ import { BaseAgent } from './base-agent';
 import { DateTimeAgent } from './datetime-agent';
 import { ReminderAgent, ReminderData } from './reminder-agent';
 import { ReminderQueue } from '../jobs/reminder-queue';
+import { LLMService } from '../services/llm.service';
 import { logger } from '../config/logger';
 
 /**
@@ -27,12 +28,14 @@ export class ConversationAgent extends BaseAgent implements IAgent {
   private dateTimeAgent: DateTimeAgent;
   private reminderAgent: ReminderAgent;
   private reminderQueue: ReminderQueue;
+  private llmService: LLMService;
 
   constructor() {
     super();
     this.dateTimeAgent = new DateTimeAgent();
     this.reminderAgent = new ReminderAgent();
     this.reminderQueue = new ReminderQueue();
+    this.llmService = new LLMService();
   }
 
   /**
@@ -47,13 +50,16 @@ export class ConversationAgent extends BaseAgent implements IAgent {
    * Handle all user messages
    */
   async handle(context: AgentContext): Promise<AgentResponse> {
-    const { user, message } = context;
-    const lowerMessage = message.toLowerCase().trim();
+    const { user, message, conversationHistory } = context;
 
     logger.info({ userId: user.id, message }, 'Conversation agent handling message');
 
-    // Detect intent
-    const intent = this.detectIntent(lowerMessage);
+    // Use LLM to detect intent
+    const recentMessages = conversationHistory?.slice(-5).map(m => m.messageText) || [];
+    const intentResult = await this.llmService.detectIntent(message, recentMessages);
+    const intent = intentResult.intent;
+
+    logger.info({ userId: user.id, intent, confidence: intentResult.confidence }, 'Intent detected');
 
     switch (intent) {
       case 'create_reminder':
@@ -83,49 +89,7 @@ export class ConversationAgent extends BaseAgent implements IAgent {
    * Get agent description
    */
   getDescription(): string {
-    return 'Main orchestrator - handles all reminder operations and general conversation';
-  }
-
-  /**
-   * Detect user intent from message
-   */
-  private detectIntent(message: string): string {
-    // Greetings
-    if (/^(hi|hello|hey|hola|namaste|sup|yo)\b/i.test(message)) {
-      return 'greeting';
-    }
-
-    // Thanks
-    if (/\b(thank|thanks|thx|ty|appreciate)\b/i.test(message)) {
-      return 'thanks';
-    }
-
-    // Help
-    if (/\b(help|what can you do|how do|guide|support)\b/i.test(message)) {
-      return 'help';
-    }
-
-    // List reminders
-    if (/^(list|show|view|my|what)\s*(reminders?|all|pinned)/i.test(message)) {
-      return 'list_reminders';
-    }
-
-    // Delete reminder
-    if (/^(cancel|delete|remove|clear)\s*(reminder)?/i.test(message)) {
-      return 'delete_reminder';
-    }
-
-    // Create reminder - if message contains time expression
-    if (this.dateTimeAgent.hasTimeExpression(message)) {
-      return 'create_reminder';
-    }
-
-    // Explicit reminder keywords
-    if (/\b(remind|reminder|pin|remember)\b/i.test(message)) {
-      return 'create_reminder';
-    }
-
-    return 'unclear';
+    return 'Main orchestrator - handles all reminder operations and general conversation with LLM-powered understanding';
   }
 
   /**
@@ -138,10 +102,13 @@ export class ConversationAgent extends BaseAgent implements IAgent {
     message: string
   ): Promise<AgentResponse> {
     try {
-      // Parse time expression using DateTimeAgent
-      const parsedTime = this.dateTimeAgent.parseDateTime(message);
+      // Use LLM to extract task and time expression
+      const extracted = await this.llmService.extractReminderData(message);
 
-      if (!parsedTime || !parsedTime.scheduledTime) {
+      logger.info({ userId, extracted }, 'Extracted reminder data');
+
+      // If no time expression found, ask for it
+      if (!extracted.hasTime || !extracted.timeExpression) {
         await this.sendMessage(
           phoneNumber,
           userId,
@@ -151,13 +118,21 @@ export class ConversationAgent extends BaseAgent implements IAgent {
         return { message: '' };
       }
 
-      // Extract task text by removing time/date expressions
-      let task = message
-        .replace(new RegExp(parsedTime.timeExpression, 'gi'), '')
-        .replace(parsedTime.dateExpression ? new RegExp(parsedTime.dateExpression, 'gi') : '', '')
-        .replace(/\b(remind me to|remind me|remind|to|at|on|-|pin)\b/gi, ' ')
-        .trim();
+      // Parse the time expression using DateTimeAgent
+      const parsedTime = this.dateTimeAgent.parseDateTime(extracted.timeExpression);
 
+      if (!parsedTime || !parsedTime.scheduledTime) {
+        await this.sendMessage(
+          phoneNumber,
+          userId,
+          `I got "${extracted.timeExpression}" but couldn't figure out the exact time. can you be more specific? like "tomorrow 7pm" or "in 30 minutes"?`,
+          { intent: 'time_parsing_failed' }
+        );
+        return { message: '' };
+      }
+
+      // Validate task
+      const task = extracted.task.trim();
       if (!task || task.length === 0) {
         await this.sendMessage(
           phoneNumber,

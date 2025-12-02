@@ -28,6 +28,8 @@ const envSchema = z.object({
   MAX_CONVERSATION_HISTORY: z.string().transform(Number).default('100'),
 
   ADMIN_TOKEN: z.string().optional().default('admin_test_token_2025'),
+
+  OPENAI_API_KEY: z.string().min(1),
 });
 
 function validateEnv() {
